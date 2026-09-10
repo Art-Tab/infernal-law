@@ -1,15 +1,18 @@
 config_version=5
 
 [application]
-config/name="Канцелярия преисподней"
+config/version="0.0.2"
+config/name="Infernal Law"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Канцелярия преисподней"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.0", "GL Compatibility")
 
 [display]
 window/size/viewport_width=1280
-window/size/viewport_height=820
+window/size/viewport_height=720
 window/size/window_width_override=1280
-window/size/window_height_override=820
+window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 
 [rendering]

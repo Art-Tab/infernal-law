@@ -1,1 +1,13 @@
 .godot/
+
+# Exports and local editor data
+builds/
+exports/
+export_templates/
+feature_profiles/
+script_templates/
+text_editor_themes/
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
