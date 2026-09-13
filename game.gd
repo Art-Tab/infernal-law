@@ -2,11 +2,12 @@ extends Control
 
 const Data = preload("res://case_data.gd")
 const Room = preload("res://reception_room.gd")
+const Tribunal = preload("res://tribunal.gd")
 const CASES = Data.CASES
 const CIRCLES = Data.CIRCLES
 const SAVE_PATH = "user://shift.json"
 var case_index = 0
-var trust = 100
+var trust = 40
 var requests = 2
 var questioned = false
 var dialogue_step = 0
@@ -24,6 +25,10 @@ var verdict_button: Button
 var save_enabled = true
 var save_path = SAVE_PATH
 var ui_root: Control
+var court: Node
+var court_state: Dictionary = {"phase":"none"}
+var personal_circle = 7
+var appointment_seen = false
 
 func _ready() -> void:
 	save_enabled = not "--test" in OS.get_cmdline_user_args()
@@ -41,13 +46,23 @@ func _ready() -> void:
 	load_game()
 	room = Room.new()
 	add_child(room)
+	court = Tribunal.new()
+	court.game = self
+	add_child(court)
 	room.restore(case_index, active)
+	if str(court_state.get("phase", "none")) != "none" or trust < 0:
+		phase = "tribunal"
+		build_hud()
+		court.resume.call_deferred()
+		return
 	phase = "receiving" if active else "waiting"
 	if case_index >= 3:
 		phase = "finished"
 	build_hud()
 	if phase == "finished":
 		show_summary()
+	elif not appointment_seen:
+		show_appointment()
 
 func make_theme() -> void:
 	var palette = Theme.new()
@@ -110,7 +125,7 @@ func build_hud() -> void:
 	title.position = Vector2(30, 22)
 	title.size.x = 350
 	hud.add_child(title)
-	var subtitle = text_label("КАНЦЕЛЯРИЯ ПОСЛЕДНЕГО СУДА   /   0.0.2", 13)
+	var subtitle = text_label("КАНЦЕЛЯРИЯ ПОСЛЕДНЕГО СУДА   /   0.0.3", 13)
 	subtitle.position = Vector2(32, 62)
 	subtitle.size.x = 480
 	hud.add_child(subtitle)
@@ -152,7 +167,10 @@ func build_hud() -> void:
 		entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(entry)
 	hint = text_label("Судите по фактам. Ожидающие никуда не торопятся.", 14)
+	if trust < 25:
+		hint.text = "Низкое доверие. При значении ниже нуля вы окажетесь перед судом."
 	stack.add_child(hint)
+	hud.visible = phase != "tribunal"
 
 func open_modal(title: String, dismissible: bool = true) -> VBoxContainer:
 	close_modal()
@@ -257,7 +275,10 @@ func check_archive() -> void:
 	show_file()
 
 func show_rules() -> void:
+	if phase == "tribunal":
+		return
 	var body = open_modal("КОДЕКС ДЕВЯТИ КРУГОВ")
+	body.add_child(text_label("Доверие: начало 40; ошибка −25; при значении ниже нуля — отстранение. При ровно 0 служба продолжается. Успешная защита восстанавливает доверие до 25."))
 	for index in range(9):
 		body.add_child(text_label(CIRCLES[index] + "\n" + Data.RULES[index]))
 	body.add_child(text_label("Приоритет: особое доверие → основной способ вреда → мотив.\nСудите по доказанным фактам. Архив необязателен. Лечение близких не отменяет умысла."))
@@ -317,9 +338,18 @@ func deliver_verdict() -> void:
 	var correct: bool = selected_circle == data.circle and selected_fact == data.evidence
 	var sentenced_index = case_index
 	var sentenced_circle: String = CIRCLES[selected_circle]
+	var trust_before = trust
 	if not correct:
-		trust = maxi(0, trust - 20)
-	history.append({"name":data.name, "circle":sentenced_circle, "correct":correct})
+		trust -= 25
+	history.append({"name":data.name, "circle":sentenced_circle, "correct":correct,
+		"case_id":data.id, "decision_circle":selected_circle, "decision_evidence":selected_fact,
+		"trust_before":trust_before, "trust_after":trust, "reviewed":false,
+		"review":{"name":data.name, "file":data.file, "facts":data.facts.duplicate(),
+		"expected_circle":data.circle, "expected_evidence":data.evidence,
+		"explanation":data.explanation, "actual_circle":sentenced_circle,
+		"actual_evidence":data.facts[selected_fact]}})
+	if trust < 0:
+		court.prepare(history.size() - 1)
 	case_index += 1
 	active = false
 	questioned = false
@@ -330,7 +360,7 @@ func deliver_verdict() -> void:
 	save_game()
 	build_hud()
 	var body = open_modal("ПРИГОВОР ЗАРЕГИСТРИРОВАН", false)
-	body.add_child(text_label("Приговор обоснован." if correct else "Ошибка круга или основания. Доверие −20.", 23))
+	body.add_child(text_label("Приговор обоснован." if correct else "Ошибка круга или основания. Доверие −25.", 23))
 	body.add_child(text_label(data.explanation))
 	body.add_child(button("Отправить осуждённого", func(): finish_departure(sentenced_index, sentenced_circle)))
 
@@ -341,6 +371,11 @@ func finish_departure(index: int, circle: String) -> void:
 	close_modal()
 	build_hud()
 	await room.depart(index, circle)
+	if trust < 0:
+		phase = "tribunal"
+		build_hud()
+		court.resume()
+		return
 	phase = "finished" if case_index >= 3 else "waiting"
 	build_hud()
 	if phase == "finished":
@@ -348,7 +383,7 @@ func finish_departure(index: int, circle: String) -> void:
 
 func show_summary() -> void:
 	var body = open_modal("СМЕНА ЗАКРЫТА", false)
-	body.add_child(text_label("Назначение утверждено. Завтра очередь станет длиннее." if trust >= 80 else "Назначена повторная аттестация. Перечитайте кодекс.", 23))
+	body.add_child(text_label("Смена завершена. Отсрочка личного приговора остаётся в силе.", 23))
 	for entry in history:
 		body.add_child(text_label("%s → %s · %s" % [entry.name, entry.circle, "обосновано" if entry.correct else "нарушение"]))
 	body.add_child(button("Начать новую смену", restart))
@@ -357,7 +392,7 @@ func show_summary() -> void:
 func restart() -> void:
 	close_modal()
 	case_index = 0
-	trust = 100
+	trust = 40
 	requests = 2
 	active = false
 	questioned = false
@@ -366,17 +401,26 @@ func restart() -> void:
 	selected_circle = -1
 	selected_fact = -1
 	history.clear()
+	court_state = {"phase":"none"}
+	appointment_seen = false
 	phase = "waiting"
-	room.restore(0, false)
+	room.desk_view(0)
 	save_game()
 	build_hud()
+	show_appointment()
+
+func show_appointment() -> void:
+	var body = open_modal("ПРИКАЗ О НАЗНАЧЕНИИ", false)
+	body.add_child(text_label("Исполнение вашего личного приговора отложено на время службы. При утрате доверия отсрочка подлежит пересмотру.", 22))
+	body.add_child(text_label("Начальное доверие: 40. Ошибочный приговор: −25. При значении ниже нуля вы займёте место в очереди. При 0 служба продолжается. После успешной защиты доверие станет 25."))
+	body.add_child(button("Приступить к службе", func(): appointment_seen = true; save_game(); close_modal()))
 
 func save_game() -> void:
 	if not save_enabled:
 		return
 	var file = FileAccess.open(save_path, FileAccess.WRITE)
 	if file:
-		file.store_string(JSON.stringify({"schema":3, "dialogue_step":dialogue_step, "active":active, "case_index":case_index, "trust":trust, "requests":requests, "history":history, "questioned":questioned, "checked":checked}))
+		file.store_string(JSON.stringify({"schema":4, "court":court_state, "personal_circle":personal_circle, "appointment_seen":appointment_seen, "dialogue_step":dialogue_step, "active":active, "case_index":case_index, "trust":trust, "requests":requests, "history":history, "questioned":questioned, "checked":checked}))
 	else:
 		push_warning("Не удалось записать сохранение: " + str(FileAccess.get_open_error()))
 
@@ -386,7 +430,10 @@ func load_game() -> void:
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if parsed is Dictionary:
 		case_index = clampi(int(parsed.get("case_index", 0)), 0, 3)
-		trust = clampi(int(parsed.get("trust", 100)), 0, 100)
+		trust = mini(int(parsed.get("trust", 100)), 100)
+		court_state = parsed.get("court", {"phase":"none"})
+		personal_circle = clampi(int(parsed.get("personal_circle", 7)), 0, 8)
+		appointment_seen = bool(parsed.get("appointment_seen", true))
 		requests = clampi(int(parsed.get("requests", 2)), 0, 2)
 		history = parsed.get("history", [])
 		questioned = bool(parsed.get("questioned", false))
@@ -401,7 +448,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if overlay.get_meta("dismissible", true):
 			close_modal()
 		get_viewport().set_input_as_handled()
-	if is_instance_valid(overlay):
+	if is_instance_valid(overlay) or phase == "tribunal":
 		return
 	if event is InputEventMouseMotion and is_instance_valid(hint):
 		var item: String = room.pick(event.position)

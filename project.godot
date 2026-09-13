@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/version="0.0.2"
+config/version="0.0.3"
 config/name="Infernal Law"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Godot/app_userdata/Канцелярия преисподней"

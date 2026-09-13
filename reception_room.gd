@@ -6,6 +6,9 @@ var camera: Camera3D
 var visitors: Dictionary = {}
 var exit_label: Label3D
 var movement: Tween
+var cinematic_time = 1.0
+var stamp_handle: Node3D
+var watched_soul: Node3D
 const DESK_POSITION = Vector3(0, 0, 0.1)
 
 func material(color: String, glow: float = 0.0) -> StandardMaterial3D:
@@ -126,7 +129,7 @@ func _ready() -> void:
 		box(self, Vector3(-0.82, 0.995, 2.05 + line * 0.075), Vector3(0.41, 0.003, 0.014), wood)
 	box(self, Vector3(0.0, 0.98, 2.25), Vector3(0.5, 0.11, 0.62), material("4e3230"))
 	box(self, Vector3(0.0, 1.04, 2.25), Vector3(0.35, 0.01, 0.43), brass)
-	cylinder(self, Vector3(0.7, 1.08, 2.24), 0.1, 0.05, 0.28, wood)
+	stamp_handle = cylinder(self, Vector3(0.7, 1.08, 2.24), 0.1, 0.05, 0.28, wood)
 	box(self, Vector3(0.7, 0.96, 2.24), Vector3(0.23, 0.06, 0.2), brass)
 	cylinder(self, Vector3(1.12, 1.02, 2.3), 0.14, 0.035, 0.17, brass)
 	for entry in [["file", Vector3(-0.82, 1.0, 2.25)], ["rules", Vector3(0, 1.03, 2.25)], ["verdict", Vector3(0.7, 1.08, 2.24)], ["bell", Vector3(1.12, 1.05, 2.3)]]:
@@ -149,6 +152,13 @@ func _ready() -> void:
 	key_light.spot_range = 8
 	key_light.spot_angle = 48
 	key_light.shadow_enabled = true
+	# This wall becomes visible when the player stands before their former desk.
+	box(self, Vector3(0, 2.4, 5.8), Vector3(9.4, 4.8, 0.3), stone)
+	for x in [-3.5, -1.8, 1.8, 3.5]:
+		box(self, Vector3(x, 2.2, 5.55), Vector3(0.28, 4.4, 0.25), trim)
+	var court_sign = plaque("СЛУЖБА НЕ ЕСТЬ ОПРАВДАНИЕ", Vector3(0, 3.2, 5.5), 30)
+	court_sign.rotation.y = PI
+	lamp(Vector3(0, 2.6, 3.7), Color("cfb78f"), 1.3, 4)
 
 func queue_position(slot: int) -> Vector3:
 	return Vector3(-2.8 - slot * 0.15, 0, -1.2 - slot * 1.45)
@@ -157,7 +167,7 @@ func create_visitor(index: int) -> Node3D:
 	var person = Node3D.new()
 	person.name = "Soul%d" % index
 	add_child(person)
-	var cloth = material(["484637", "383f42", "493535"][index])
+	var cloth = material("33282a" if index == 4 else ["484637", "383f42", "493535"][index % 3])
 	var dark = material("151b1a")
 	var face = material("b6b29d")
 	cylinder(person, Vector3(0, 0.72, 0), 0.38, 0.24, 1.35, cloth)
@@ -180,7 +190,10 @@ func create_visitor(index: int) -> Node3D:
 		box(person, Vector3(side * 0.076, 1.61, 0.255), Vector3(0.075, 0.043, 0.015), dark)
 	box(person, Vector3(0, 1.43, 0.25), Vector3(0.07, 0.018, 0.014), dark)
 	box(person, Vector3(0, 0.98, 0.25), Vector3(0.045, 0.66, 0.035), material("867957"))
-	person.scale = [Vector3(1.1, 1.0, 1), Vector3(0.88, 0.96, 0.9), Vector3(1.0, 1.14, 1)][index]
+	person.scale = [Vector3(1.1, 1.0, 1), Vector3(0.88, 0.96, 0.9), Vector3(1.0, 1.14, 1)][index % 3]
+	if index == 4:
+		person.scale = Vector3(1.2, 1.0, 1.1)
+		box(person, Vector3(0, 1.32, 0.27), Vector3(0.35, 0.06, 0.04), material("94805a"))
 	visitors[index] = person
 	return person
 
@@ -211,12 +224,81 @@ func depart(index: int, circle: String) -> void:
 	var person: Node3D = visitors[index]
 	movement = create_tween()
 	movement.tween_property(person, "rotation:y", -PI / 2, 0.2)
+	if index >= 3:
+		movement.set_speed_scale(1.0 / cinematic_time)
+		watched_soul = person
 	movement.tween_property(person, "position", Vector3(2.85, 0, 0.1), 0.9)
 	movement.tween_property(person, "rotation:y", PI, 0.2)
 	movement.tween_property(person, "position", Vector3(2.85, 0, -5.1), 1.3)
 	await movement.finished
+	if watched_soul == person:
+		camera.look_at(person.position + Vector3(0, 1.2, 0))
+		watched_soul = null
 	visitors.erase(index)
 	person.queue_free()
+
+func _process(delta: float) -> void:
+	if is_instance_valid(watched_soul):
+		var direction = watched_soul.position + Vector3(0, 1.2, 0) - camera.position
+		var target_rotation = Basis.looking_at(direction).get_rotation_quaternion()
+		camera.quaternion = camera.quaternion.slerp(target_rotation, minf(1.0, delta * 5.0 / cinematic_time))
+
+func court_view(index: int, in_queue: bool) -> void:
+	restore(index, false)
+	for soul in visitors.values():
+		soul.visible = false
+	var judge = create_visitor(4)
+	judge.position = Vector3(0, -0.12, 3.65)
+	judge.rotation.y = PI
+	if in_queue:
+		var preceding = create_visitor(3)
+		preceding.position = DESK_POSITION
+		camera.position = Vector3(-2.8, 1.65, -1.2)
+	else:
+		camera.position = Vector3(0, 1.65, 0.1)
+	camera.look_at(Vector3(0, 1.4, 1.5 if in_queue else 3.65))
+
+func walk_to_judge() -> void:
+	var destination = Vector3(0, 1.65, 0.1)
+	var final_transform = Transform3D(Basis.looking_at(Vector3(0, 1.4, 3.65) - destination), destination)
+	var travel = create_tween()
+	travel.tween_property(camera, "transform", final_transform, 2.5 * cinematic_time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await travel.finished
+
+func desk_view(index: int) -> void:
+	restore(index, false)
+	camera.position = Vector3(0, 1.65, 4)
+	camera.look_at(Vector3(0, 1.12, -1.3))
+
+func walk_to_hell(circle: String) -> void:
+	exit_label.text = circle.to_upper()
+	var travel = create_tween()
+	var first = Vector3(2.85, 1.65, 0.1)
+	var last = Vector3(2.85, 1.65, -5.1)
+	travel.tween_property(camera, "transform", Transform3D(Basis.looking_at(Vector3(1, 0, 0)), first), 1.5 * cinematic_time)
+	travel.tween_property(camera, "transform", Transform3D(Basis.looking_at(Vector3(0, 0, -1)), last), 2.5 * cinematic_time)
+	await travel.finished
+
+func stamp() -> void:
+	var motion = create_tween()
+	motion.tween_property(stamp_handle, "position:y", 0.95, 0.12 * cinematic_time)
+	motion.tween_property(stamp_handle, "position:y", 1.08, 0.18 * cinematic_time)
+	var sound = AudioStreamWAV.new()
+	sound.format = AudioStreamWAV.FORMAT_16_BITS
+	sound.mix_rate = 22050
+	var samples = PackedByteArray()
+	samples.resize(4400 * 2)
+	for index in range(4400):
+		var t = float(index) / 22050.0
+		var value = sin(t * TAU * 95) * exp(-t * 34) * 16000
+		samples.encode_s16(index * 2, int(value))
+	sound.data = samples
+	var player = AudioStreamPlayer.new()
+	player.stream = sound
+	player.volume_db = -10
+	add_child(player)
+	player.finished.connect(player.queue_free)
+	player.play()
 
 func pick(screen_position: Vector2) -> String:
 	var start = camera.project_ray_origin(screen_position)

@@ -69,7 +69,7 @@ func run() -> void:
 		scene.finish_departure(index, "ignored")
 		await create_timer(3.0).timeout
 		check(scene.room.visitors.size() == 2 - index, "Soul leaves queue permanently")
-	check(scene.phase == "finished" and scene.trust == 100, "Full shift and correct verdicts")
+	check(scene.phase == "finished" and scene.trust == 40, "Full shift and correct verdicts")
 	scene.restart()
 	check(scene.phase == "waiting" and scene.room.visitors.size() == 3 and scene.requests == 2, "Restart resets shift")
 	scene.call_next()
@@ -77,6 +77,6 @@ func run() -> void:
 	scene.selected_circle = 0
 	scene.selected_fact = 0
 	scene.deliver_verdict()
-	check(scene.trust == 80, "Incorrect verdict penalty")
+	check(scene.trust == 15, "Incorrect verdict penalty")
 	print("PASS: ", checks, " gameplay/save checks")
 	quit(0)
