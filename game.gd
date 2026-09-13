@@ -9,6 +9,7 @@ var case_index = 0
 var trust = 100
 var requests = 2
 var questioned = false
+var dialogue_step = 0
 var checked = false
 var active = false
 var phase = "waiting"
@@ -211,15 +212,37 @@ func show_dialogue() -> void:
 	panel.anchor_bottom = 0.97
 	var shade: ColorRect = overlay.get_child(0)
 	shade.color.a = 0.12
-	body.add_child(text_label(CASES[case_index].intro))
-	if questioned:
-		body.add_child(text_label("Судья: " + CASES[case_index].question + "\n\n" + CASES[case_index].answer))
+	var steps: Array = CASES[case_index].dialogue
+	if dialogue_step == 0:
+		body.add_child(text_label(CASES[case_index].intro))
 	else:
-		body.add_child(button(CASES[case_index].question, ask_question))
+		var reply: Dictionary = steps[dialogue_step - 1]
+		body.add_child(text_label("Судья: " + reply.question, 16))
+		body.add_child(text_label(CASES[case_index].name + ": " + reply.answer))
+	if dialogue_step < steps.size():
+		var expected_step = dialogue_step
+		body.add_child(button(steps[dialogue_step].question, func(): ask_question(expected_step)))
+	else:
+		body.add_child(text_label("Вопросы заданы. Решение остаётся за вами.", 16))
+	if dialogue_step > 0:
+		body.add_child(button("История допроса", show_dialogue_history))
 
-func ask_question() -> void:
+func show_dialogue_history() -> void:
 	if phase != "receiving":
 		return
+	var body = open_modal("ИСТОРИЯ ДОПРОСА · " + CASES[case_index].name)
+	body.add_child(text_label(CASES[case_index].name + ": " + CASES[case_index].intro))
+	for index in range(dialogue_step):
+		var reply: Dictionary = CASES[case_index].dialogue[index]
+		body.add_child(text_label("Судья: " + reply.question + "\n" + CASES[case_index].name + ": " + reply.answer))
+	body.add_child(button("Продолжить допрос", show_dialogue))
+
+func ask_question(expected_step: int = -1) -> void:
+	if phase != "receiving" or dialogue_step >= CASES[case_index].dialogue.size():
+		return
+	if expected_step >= 0 and expected_step != dialogue_step:
+		return
+	dialogue_step += 1
 	questioned = true
 	save_game()
 	show_dialogue()
@@ -285,7 +308,6 @@ func call_next() -> void:
 	await room.approach(case_index)
 	phase = "receiving"
 	build_hud()
-	show_dialogue()
 
 func deliver_verdict() -> void:
 	if phase != "receiving" or selected_circle < 0 or selected_fact < 0:
@@ -301,6 +323,7 @@ func deliver_verdict() -> void:
 	case_index += 1
 	active = false
 	questioned = false
+	dialogue_step = 0
 	checked = false
 	selected_circle = -1
 	selected_fact = -1
@@ -338,6 +361,7 @@ func restart() -> void:
 	requests = 2
 	active = false
 	questioned = false
+	dialogue_step = 0
 	checked = false
 	selected_circle = -1
 	selected_fact = -1
@@ -352,7 +376,7 @@ func save_game() -> void:
 		return
 	var file = FileAccess.open(save_path, FileAccess.WRITE)
 	if file:
-		file.store_string(JSON.stringify({"schema":2, "active":active, "case_index":case_index, "trust":trust, "requests":requests, "history":history, "questioned":questioned, "checked":checked}))
+		file.store_string(JSON.stringify({"schema":3, "dialogue_step":dialogue_step, "active":active, "case_index":case_index, "trust":trust, "requests":requests, "history":history, "questioned":questioned, "checked":checked}))
 	else:
 		push_warning("Не удалось записать сохранение: " + str(FileAccess.get_open_error()))
 
@@ -366,6 +390,9 @@ func load_game() -> void:
 		requests = clampi(int(parsed.get("requests", 2)), 0, 2)
 		history = parsed.get("history", [])
 		questioned = bool(parsed.get("questioned", false))
+		var step_count: int = CASES[case_index].dialogue.size() if case_index < CASES.size() else 0
+		dialogue_step = clampi(int(parsed.get("dialogue_step", step_count if questioned else 0)), 0, step_count)
+		questioned = dialogue_step > 0
 		checked = bool(parsed.get("checked", false))
 		active = bool(parsed.get("active", questioned or checked)) and case_index < 3
 
