@@ -25,10 +25,10 @@ func run() -> void:
 			var available = 0
 			for entry in scene.overlay.find_children("*", "Button", true, false):
 				for pair in scene.CASES[index].dialogue:
-					if entry.text == pair.question:
+					if entry.text == scene.tr(pair.question):
 						available += 1
 						question_button = entry
-			require(available == 1 and question_button.text == scene.CASES[index].dialogue[step].question, "Only next question is offered")
+			require(available == 1 and question_button.text == scene.tr(scene.CASES[index].dialogue[step].question), "Only next question is offered")
 			question_button.pressed.emit()
 			question_button.pressed.emit()
 			require(scene.dialogue_step == step + 1, "Double-click does not skip an answer")
@@ -49,9 +49,9 @@ func run() -> void:
 			var history_text = ""
 			for entry in scene.overlay.find_children("*", "Label", true, false):
 				history_text += entry.text
-			require(history_text.contains(scene.CASES[index].dialogue[step].answer), "Answered line in history")
+			require(history_text.contains(scene.tr(scene.CASES[index].dialogue[step].answer)), "Answered line in history")
 			if step < 2:
-				require(not history_text.contains(scene.CASES[index].dialogue[step + 1].answer), "History does not reveal future answers")
+				require(not history_text.contains(scene.tr(scene.CASES[index].dialogue[step + 1].answer)), "History does not reveal future answers")
 			scene.show_dialogue()
 			await process_frame
 			await process_frame

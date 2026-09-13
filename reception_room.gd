@@ -42,9 +42,19 @@ func cylinder(parent: Node3D, at: Vector3, bottom: float, top: float, height: fl
 	shape.radial_segments = 10
 	return mesh(parent, shape, at, surface)
 
+func set_exit(key: String) -> void:
+	exit_label.set_meta("translation_key", key)
+	exit_label.text = tr(key).to_upper()
+
+func refresh_language() -> void:
+	for child in get_children():
+		if child is Label3D and child.has_meta("translation_key"):
+			child.text = tr(str(child.get_meta("translation_key"))).to_upper()
+
 func plaque(value: String, at: Vector3, size: int = 40) -> Label3D:
 	var text = Label3D.new()
-	text.text = value
+	text.set_meta("translation_key", value)
+	text.text = tr(value)
 	text.font_size = size
 	text.pixel_size = 0.007
 	text.modulate = Color("c2af88")
@@ -109,9 +119,9 @@ func _ready() -> void:
 		for bar in range(7):
 			box(self, Vector3(x - 0.7 + bar * 0.23, 1.5, -5.39), Vector3(0.045, 2.8, 0.08), brass)
 		lamp(Vector3(x, 2.8, -4.8), Color("bcad83"), 1.3, 4)
-	plaque("ОЖИДАНИЕ", Vector3(-2.85, 3.5, -5.3), 28)
-	exit_label = plaque("РАСПРЕДЕЛЕНИЕ", Vector3(2.85, 3.5, -5.3), 28)
-	plaque("НИ ОДНА ДУША НЕ ЗАБЫТА", Vector3(0, 4.05, -6.45), 27)
+	plaque("ROOM_WAITING", Vector3(-2.85, 3.5, -5.3), 28)
+	exit_label = plaque("ROOM_DISTRIBUTION", Vector3(2.85, 3.5, -5.3), 28)
+	plaque("ROOM_MOTTO", Vector3(0, 4.05, -6.45), 27)
 	# Brass queue railing leaves the front approach completely open.
 	for depth in [-4.3, -3.1, -1.9]:
 		cylinder(self, Vector3(-1.8, 0.55, depth), 0.055, 0.055, 1.1, brass)
@@ -156,7 +166,7 @@ func _ready() -> void:
 	box(self, Vector3(0, 2.4, 5.8), Vector3(9.4, 4.8, 0.3), stone)
 	for x in [-3.5, -1.8, 1.8, 3.5]:
 		box(self, Vector3(x, 2.2, 5.55), Vector3(0.28, 4.4, 0.25), trim)
-	var court_sign = plaque("СЛУЖБА НЕ ЕСТЬ ОПРАВДАНИЕ", Vector3(0, 3.2, 5.5), 30)
+	var court_sign = plaque("ROOM_COURT_MOTTO", Vector3(0, 3.2, 5.5), 30)
 	court_sign.rotation.y = PI
 	lamp(Vector3(0, 2.6, 3.7), Color("cfb78f"), 1.3, 4)
 
@@ -207,7 +217,7 @@ func restore(index: int, active: bool) -> void:
 	for i in range(index, 3):
 		var person = create_visitor(i)
 		person.position = DESK_POSITION if active and i == index else queue_position(i - index - (1 if active else 0))
-		exit_label.text = "РАСПРЕДЕЛЕНИЕ"
+		set_exit("ROOM_DISTRIBUTION")
 
 func approach(index: int) -> void:
 	movement = create_tween()
@@ -220,7 +230,7 @@ func approach(index: int) -> void:
 	await movement.finished
 
 func depart(index: int, circle: String) -> void:
-	exit_label.text = circle.to_upper()
+	set_exit(circle)
 	var person: Node3D = visitors[index]
 	movement = create_tween()
 	movement.tween_property(person, "rotation:y", -PI / 2, 0.2)
@@ -271,7 +281,7 @@ func desk_view(index: int) -> void:
 	camera.look_at(Vector3(0, 1.12, -1.3))
 
 func walk_to_hell(circle: String) -> void:
-	exit_label.text = circle.to_upper()
+	set_exit(circle)
 	var travel = create_tween()
 	var first = Vector3(2.85, 1.65, 0.1)
 	var last = Vector3(2.85, 1.65, -5.1)

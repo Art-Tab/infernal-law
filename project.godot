@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/version="0.0.3"
+config/version="0.0.4"
 config/name="Infernal Law"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Godot/app_userdata/Канцелярия преисподней"
@@ -18,3 +18,6 @@ window/stretch/mode="canvas_items"
 [rendering]
 renderer/rendering_method="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.055, 0.045, 0.05, 1)
+
+[internationalization]
+locale/fallback="en"
