@@ -149,7 +149,7 @@ func run() -> void:
 	require(loaded.court_state.phase == "over", "Execution checkpoint completes the sentence")
 	loaded.queue_free()
 	require(game.court_state.phase == "over", "Sentencing reaches game over")
-	require(game.room.exit_label.text == game.CIRCLES[7].to_upper(), "Own eighth circle displayed")
+	require(game.room.exit_label.text == game.tr(game.CIRCLES[7]).to_upper(), "Own eighth circle displayed")
 	loaded = save_and_reload(game)
 	loaded.court.resume()
 	require(loaded.court_state.phase == "over", "Game over persists")
